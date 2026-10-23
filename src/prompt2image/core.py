@@ -218,8 +218,11 @@ def source_band(image: Source, *, filename: str = "", max_mb: Optional[float] = 
     """The source of an edit as it is compared with the result, a padded panorama without its white band."""
     content, _name, _ext, _media_type = _read(image, filename, max_mb)
     width, height = dimensions(content)
-    _w, _h, band = options.balance(width, height)
-    return options.crop(content, band) if band else content
+    width, height, band = options.balance(width, height)
+    if not band:
+        return content
+    # The source went onto a canvas, so it comes back the same way the result does.
+    return options.crop(options.pad(content, width, height), band)
 
 
 # -- Read ---------------------------------------------------------------------
