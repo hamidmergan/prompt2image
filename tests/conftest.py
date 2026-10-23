@@ -48,7 +48,12 @@ class FakeServer:
         self.statuses = []  # a queue of statuses, for the size fallback
         self.answer = "A white square."
         self.image = png()
-        self.raw_image = False  # answer an edit with image bytes instead of base64
+        self.raw_image = False  # answer with image bytes instead of base64
+        self.raw_type = "image/png"  # the content type of a raw image answer
+        self.error = "something went wrong"  # the message inside a failing answer
+        # How the picture is packed into a JSON answer: b64_json, b64, top_b64_json, top_b64,
+        # url (a link instead of the data) or empty (no picture at all).
+        self.spelling = "b64_json"
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -77,7 +82,7 @@ class FakeServer:
                 })
                 status = outer.statuses.pop(0) if outer.statuses else outer.status
                 if status != 200:
-                    self._send(status, json.dumps({"error": "no"}).encode())
+                    self._send(status, json.dumps({"error": {"message": outer.error}}).encode())
                     return
                 if self.path.endswith("/chat/completions"):
                     self._send(200, json.dumps({
@@ -85,16 +90,26 @@ class FakeServer:
                                      "message": {"role": "assistant", "content": outer.answer}}],
                     }).encode())
                     return
-                if self.path.endswith("/images/edits") and outer.raw_image:
-                    self._send(200, outer.image, "image/png")
+                if outer.raw_image:
+                    self._send(200, outer.image, outer.raw_type)
                     return
-                self._send(200, json.dumps({
-                    "data": [{"b64_json": base64.b64encode(outer.image).decode()}],
-                }).encode())
+                self._send(200, json.dumps(outer.packed()).encode())
 
         self.httpd = HTTPServer(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
+
+    def packed(self) -> dict:
+        """The picture in the spelling this server was told to answer with."""
+        data = base64.b64encode(self.image).decode()
+        return {
+            "b64_json": {"data": [{"b64_json": data}]},
+            "b64": {"data": [{"b64": data}]},
+            "top_b64_json": {"b64_json": data},
+            "top_b64": {"b64": data},
+            "url": {"data": [{"url": "http://127.0.0.1:1/picture.png"}]},
+            "empty": {"data": []},
+        }[self.spelling]
 
     @property
     def base_url(self):
@@ -116,6 +131,14 @@ def server():
 
 
 @pytest.fixture
+def other_server():
+    """A second server, for the test that an edit can go somewhere else."""
+    s = FakeServer()
+    yield s
+    s.stop()
+
+
+@pytest.fixture
 def settings(server, monkeypatch):
     """Address and model in the environment, as a person would set them."""
     monkeypatch.setenv("PROMPT2IMAGE_BASE_URL", server.base_url)
@@ -130,6 +153,17 @@ def clean_env(monkeypatch):
     for name in list(os.environ):
         if name.startswith("PROMPT2IMAGE_") or name == "OPENAI_API_KEY":
             monkeypatch.delenv(name)
+
+
+@pytest.fixture
+def closed_port():
+    """An address nothing listens on, for the tests about a failing connection."""
+    import socket
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    return f"http://127.0.0.1:{port}/v1"
 
 
 @pytest.fixture

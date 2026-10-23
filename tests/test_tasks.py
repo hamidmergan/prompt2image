@@ -35,6 +35,7 @@ def test_an_expanded_prompt_replaces_the_short_one(settings):
 def test_if_the_server_refuses_the_size_it_is_tried_smaller(settings):
     """A server can answer that the height must be between 1 and 1080."""
     settings.statuses = [422, 200]
+    settings.error = "the height must be between 1 and 1080"
     core.generate("An apple", format_="16:9", size="large")
     assert [b["size"] for b in settings.bodies("/images/generations")] == ["1920x1088", "1904x1072"]
 
@@ -44,6 +45,24 @@ def test_a_size_that_already_fits_is_not_tried_again(settings):
     with pytest.raises(ModelError):
         core.generate("An apple", format_="1:1", size="medium")
     assert len(settings.bodies("/images/generations")) == 1
+
+
+def test_a_complaint_about_something_else_is_not_tried_smaller(settings):
+    settings.statuses = [400]
+    settings.error = "num_inference_steps is not a known field"
+    with pytest.raises(ModelError) as info:
+        core.generate("An apple", format_="16:9", size="large")
+    assert len(settings.bodies("/images/generations")) == 1
+    # The message says what the server really complained about.
+    assert "num_inference_steps" in str(info.value)
+
+
+def test_the_size_that_was_used_comes_with_the_picture(settings):
+    settings.statuses = [422, 200]
+    settings.error = "the height must be between 1 and 1080"
+    picture = core.generate("An apple", format_="16:9", size="large")[0]
+    assert picture.size == "1904x1072"
+    assert core.generate("An apple", format_="1:1", size="small")[0].size == "768x768"
 
 
 def test_every_variant_is_a_request_of_its_own(settings):
@@ -86,6 +105,24 @@ def test_edit_takes_an_image_answer_as_it_is(settings, image_file):
         assert (answer.width, answer.height) == (8, 8)
 
 
+def test_a_panorama_reaches_the_server_on_a_padded_canvas(settings, tmp_path):
+    path = tmp_path / "panorama.png"
+    path.write_bytes(png(2048, 400))
+    core.edit(path, "skyline")
+    form = settings.bodies("/images/edits")[0]
+    with Image.open(io.BytesIO(form["image"]["content"])) as uploaded:
+        # 2048x400 is beyond 4:1, so it goes onto a 2048x512 canvas before it is sent.
+        assert (uploaded.width, uploaded.height) == (2048, 512)
+    assert form["size"] == "2048x512"
+
+
+def test_a_fixed_format_keeps_the_whole_canvas_as_the_source(tmp_path):
+    path = tmp_path / "panorama.png"
+    path.write_bytes(png(2048, 400))
+    with Image.open(io.BytesIO(core.source_band(path, format_="1:1"))) as source:
+        assert (source.width, source.height) == (2048, 512)
+
+
 def test_a_padded_panorama_comes_back_as_its_band(settings, tmp_path):
     path = tmp_path / "panorama.png"
     path.write_bytes(png(2048, 400))
@@ -116,7 +153,7 @@ def test_describe_sends_the_instruction_and_a_length_limit(settings, image_file)
     assert "Respond in German." in text
     # The general prompt asks for detail and the language of the image, both would override the task.
     assert "same language as the primary text" not in text
-    assert body["max_tokens"] > 0
+    assert body["max_tokens"] == 1500
 
 
 def test_describe_attaches_the_picture_as_a_data_url(settings, image_file):
@@ -177,11 +214,116 @@ def test_a_failing_server_becomes_a_model_error(settings, image_file):
         core.describe(image_file)
 
 
-def test_an_answer_without_a_picture_becomes_a_model_error(settings, monkeypatch, image_file):
-    settings.raw_image = False
-    monkeypatch.setattr(core, "_payload", lambda response: {"data": []})
+def test_an_answer_without_a_picture_becomes_a_model_error(settings):
+    settings.spelling = "empty"
+    with pytest.raises(ModelError) as info:
+        core.generate("An apple")
+    assert "no image" in str(info.value)
+
+
+@pytest.mark.parametrize("spelling", ["b64_json", "b64", "top_b64_json", "top_b64"])
+def test_the_picture_is_found_in_every_usual_answer_shape(settings, spelling):
+    settings.spelling = spelling
+    settings.image = png(8, 8, "red")
+    assert core.generate("An apple")[0] == settings.image
+
+
+def test_a_link_instead_of_the_picture_is_a_clear_error(settings, image_file):
+    settings.spelling = "url"
+    with pytest.raises(ModelError) as info:
+        core.generate("An apple")
+    assert "link" in str(info.value)
+    with pytest.raises(ModelError):
+        core.edit(image_file, "blue")
+
+
+def test_a_jpeg_answer_comes_back_as_a_png(settings, image_file):
+    settings.raw_image = True
+    settings.raw_type = "image/jpeg"
+    settings.image = jpg(8, 8)
+    for result in (core.edit(image_file, "blue")[0], core.generate("An apple")[0]):
+        with Image.open(io.BytesIO(result)) as picture:
+            assert picture.format == "PNG"
+
+
+def test_an_answer_that_is_no_picture_at_all_becomes_a_model_error(settings):
+    settings.raw_image = True
+    settings.image = b"not a picture"
     with pytest.raises(ModelError):
         core.generate("An apple")
+
+
+def test_a_refused_connection_becomes_a_model_error(closed_port, image_file, monkeypatch):
+    monkeypatch.setenv("PROMPT2IMAGE_BASE_URL", closed_port)
+    monkeypatch.setenv("PROMPT2IMAGE_MODEL", "a-model")
+    monkeypatch.setenv("PROMPT2IMAGE_MAX_RETRIES", "0")
+    with pytest.raises(ModelError) as info:
+        core.generate("An apple")
+    assert "could not be created" in str(info.value)
+    with pytest.raises(ModelError):
+        core.edit(image_file, "blue")
+    with pytest.raises(ModelError):
+        core.describe(image_file)
+    with pytest.raises(ModelError):
+        core.enhance("an apple")
+
+
+def test_a_timeout_becomes_a_model_error(monkeypatch):
+    import socket
+
+    waiting = socket.socket()
+    waiting.bind(("127.0.0.1", 0))
+    waiting.listen(1)
+    try:
+        monkeypatch.setenv("PROMPT2IMAGE_BASE_URL", f"http://127.0.0.1:{waiting.getsockname()[1]}/v1")
+        monkeypatch.setenv("PROMPT2IMAGE_MODEL", "a-model")
+        monkeypatch.setenv("PROMPT2IMAGE_MAX_RETRIES", "0")
+        with pytest.raises(ModelError):
+            core.generate("An apple", timeout=0.3)
+    finally:
+        waiting.close()
+
+
+def test_a_busy_server_is_tried_again_as_often_as_the_environment_says(settings, monkeypatch):
+    monkeypatch.setenv("PROMPT2IMAGE_MAX_RETRIES", "4")
+    settings.statuses = [503, 503, 503, 503, 200]
+    core.generate("An apple")
+    assert len(settings.bodies("/images/generations")) == 5
+
+
+def test_without_retries_one_attempt_is_made(settings, monkeypatch):
+    monkeypatch.setenv("PROMPT2IMAGE_MAX_RETRIES", "0")
+    settings.statuses = [503]
+    with pytest.raises(ModelError):
+        core.generate("An apple")
+    assert len(settings.bodies("/images/generations")) == 1
+
+
+def test_the_message_names_what_the_server_said(settings, image_file, monkeypatch):
+    monkeypatch.setenv("PROMPT2IMAGE_MAX_RETRIES", "0")
+    settings.status = 500
+    settings.error = "the model is not loaded"
+    with pytest.raises(ModelError) as info:
+        core.describe(image_file)
+    assert "the model is not loaded" in str(info.value)
+
+
+def test_a_passed_client_keeps_the_edit_header_and_stays_open(settings, image_file):
+    import httpx
+
+    with httpx.Client() as client:
+        core.edit(image_file, "blue", client=client)
+        core.edit(image_file, "green", client=client)
+    headers = [r["headers"] for r in settings.requests if r["path"].endswith("/images/edits")]
+    assert [h["inference-service"] for h in headers] == ["a-model", "a-model"]
+
+
+def test_an_edit_can_go_to_a_server_of_its_own(settings, other_server, image_file, monkeypatch):
+    monkeypatch.setenv("PROMPT2IMAGE_EDIT_BASE_URL", other_server.base_url)
+    monkeypatch.setenv("PROMPT2IMAGE_EDIT_MODEL", "an-edit-model")
+    core.edit(image_file, "blue")
+    assert other_server.bodies("/images/edits")[0]["model"] == "an-edit-model"
+    assert settings.requests == []
 
 
 @pytest.mark.parametrize("name, content", [
