@@ -45,6 +45,10 @@ def _parser() -> argparse.ArgumentParser:
     gen.add_argument("--enhance", action="store_true",
                      help="Expand the prompt with a chat model before the image is created")
     _model_arguments(gen, "Name of the image model")
+    # The chat model for --enhance is a different model, so it has its own flags.
+    gen.add_argument("--chat-base-url", help="Server for --enhance, by default the one of --base-url")
+    gen.add_argument("--chat-model", help="Name of the chat model for --enhance")
+    gen.add_argument("--chat-api-key", help="API key for --enhance, by default the one of --api-key")
 
     ed = sub.add_parser("edit", help="Change an image as an instruction says")
     ed.add_argument("image", help="Input image, PNG or JPG")
@@ -100,7 +104,13 @@ def _run_generate(args: argparse.Namespace) -> int:
     model_prompt = ""
     if args.enhance:
         # The chat model has its own settings, with the image values as a fallback.
-        model_prompt = enhance(prompt, timeout=args.timeout)
+        model_prompt = enhance(
+            prompt,
+            base_url=args.chat_base_url or args.base_url,
+            model=args.chat_model,
+            api_key=args.chat_api_key or args.api_key,
+            timeout=args.timeout,
+        )
         print(model_prompt, file=sys.stderr)
     images = generate(
         prompt,

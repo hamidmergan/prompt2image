@@ -19,6 +19,13 @@ PLACEHOLDER_API_KEY = "none"
 # Endpoint kinds and the prefix of their own variables.
 IMAGE, EDIT, VISION, CHAT = "image", "edit", "vision", "chat"
 _KIND_PREFIX = {IMAGE: "", EDIT: "EDIT_", VISION: "VISION_", CHAT: "CHAT_"}
+# The flags that feed a kind on the command line, so an error can name the right one.
+_KIND_FLAG = {
+    IMAGE: ("--base-url", "--model"),
+    EDIT: ("--base-url", "--model"),
+    VISION: ("--base-url", "--model"),
+    CHAT: ("--chat-base-url", "--chat-model"),
+}
 _KIND_MODEL = {
     IMAGE: "an image generation model",
     EDIT: "an image editing model",
@@ -62,8 +69,8 @@ def _cast(name: str, raw: str, cast):
 
 def _kind_value(kind: str, name: str) -> Optional[str]:
     """The kind's own variable, then the main one."""
-    own = _KIND_PREFIX[kind] + name
-    return _env(own) if _env(own) is not None else _env(name)
+    own = _env(_KIND_PREFIX[kind] + name)
+    return own if own is not None else _env(name)
 
 
 def _kind_var(kind: str, name: str) -> str:
@@ -96,11 +103,12 @@ def endpoint(
         raise ConfigError(f"Unknown endpoint kind {kind!r}.")
     base_url = base_url or _kind_value(kind, "BASE_URL")
     model = model or _kind_value(kind, "MODEL")
+    url_flag, model_flag = _KIND_FLAG[kind]
     missing = []
     if not base_url:
-        missing.append(f"base_url (--base-url or {_kind_var(kind, 'BASE_URL')})")
+        missing.append(f"base_url ({url_flag} or {_kind_var(kind, 'BASE_URL')})")
     if not model:
-        missing.append(f"model (--model or {_kind_var(kind, 'MODEL')})")
+        missing.append(f"model ({model_flag} or {_kind_var(kind, 'MODEL')})")
     if missing:
         raise ConfigError(
             "Missing: " + " and ".join(missing) + ". "

@@ -43,6 +43,36 @@ def test_enhance_asks_a_chat_model_first(settings, tmp_path):
     assert "brick wall" in settings.bodies("/images/generations")[0]["prompt"]
 
 
+def test_enhance_takes_the_server_and_the_key_from_the_flags(server, tmp_path):
+    main(["generate", "a red bicycle", "-o", str(tmp_path / "a.png"), "--enhance",
+          "--base-url", server.base_url, "--model", "an-image-model",
+          "--chat-model", "a-chat-model", "--api-key", "secret"])
+    assert server.bodies("/chat/completions")[0]["model"] == "a-chat-model"
+    assert server.bodies("/images/generations")[0]["model"] == "an-image-model"
+    chat = [r for r in server.requests if r["path"].endswith("/chat/completions")][0]
+    assert chat["headers"]["authorization"] == "Bearer secret"
+
+
+def test_the_chat_model_can_sit_on_another_server(server, other_server, tmp_path):
+    main(["generate", "a red bicycle", "-o", str(tmp_path / "a.png"), "--enhance",
+          "--base-url", server.base_url, "--model", "an-image-model",
+          "--chat-base-url", other_server.base_url, "--chat-model", "a-chat-model"])
+    assert other_server.bodies("/chat/completions")[0]["model"] == "a-chat-model"
+    assert server.bodies("/chat/completions") == []
+
+
+def test_enhance_without_a_chat_model_says_what_to_set(server, tmp_path, capsys):
+    assert main(["generate", "a red bicycle", "-o", str(tmp_path / "a.png"), "--enhance",
+                 "--base-url", server.base_url, "--model", "an-image-model"]) == 2
+    error = capsys.readouterr().err
+    assert "--chat-model" in error and "PROMPT2IMAGE_CHAT_MODEL" in error
+
+
+def test_the_longest_answer_can_be_set(settings, image_file):
+    main(["describe", str(image_file), "--max-tokens", "200"])
+    assert settings.bodies("/chat/completions")[0]["max_tokens"] == 200
+
+
 def test_edit_writes_next_to_the_source_by_default(settings, image_file):
     assert main(["edit", str(image_file), "make it blue"]) == 0
     assert (image_file.parent / "picture-edited.png").exists()
