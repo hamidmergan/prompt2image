@@ -49,7 +49,7 @@ Then open http://localhost:8000. Stop it with `Ctrl+C`. Use `--port 9000` for an
 
 Pick a tab for creating, editing or describing. A created picture stays in the strip below, so you can edit it further or have it described right away. Every result can be downloaded as PNG or JPG. An edit shows before and after side by side.
 
-The server and the models come from the environment. If something is missing, the page opens its settings and you can fill in the address, the model and the key there. Nothing is stored on the server, the fields travel with the call.
+The server and the models come from the environment. If something is missing, the page opens its settings and you can fill in the address and the key there, with a field per model: creating, editing, describing and expanding a prompt each use their own. Nothing is stored on the server, the fields travel with the call.
 
 The page only answers requests for localhost, which protects against DNS rebinding. On a server in a trusted network, use `--allowed-hosts your-server-name`, or `--allowed-hosts "*"` for any name. There is no login.
 
@@ -99,8 +99,10 @@ prompt2image generate "a red bicycle" -o bike.png -n 2
 Let a chat model expand a short idea into a detailed prompt first. The expanded text is printed on stderr:
 
 ```bash
-prompt2image generate "a red bicycle" -o bike.png --enhance
+prompt2image generate "a red bicycle" -o bike.png --enhance --chat-model your-chat-model
 ```
+
+The expanded prompt comes from a chat model, which is a different model than the image one, so it has its own flags: `--chat-model`, `--chat-base-url` and `--chat-api-key`. Without the last two the server and the key of the image model are used.
 
 Change an existing picture:
 
@@ -146,6 +148,23 @@ print(text)
 
 `generate` and `edit` return a list of PNG bytes, one entry per variant. `describe` returns the answer as text. `enhance("a red bicycle")` returns a detailed prompt from a chat model.
 
+Each entry of `generate` also carries the geometry the server really used, which is smaller than the one asked for when the server refused the first size:
+
+```python
+pictures = generate("a red bicycle", format_="16:9", size="large", base_url=..., model=...)
+print(pictures[0].size)
+```
+
+All four functions take `client=` for an open `httpx.Client`, so a batch of pictures shares one connection. The client is used as it is and stays open for the next call, which means its own headers apply and `base_url`, `api_key`, `timeout` and `max_retries` from the settings are bypassed. Everything else, the model name included, still comes from the settings:
+
+```python
+import httpx
+
+with httpx.Client(timeout=300) as session:
+    for name in ("one.png", "two.png"):
+        open(f"blue-{name}", "wb").write(edit(name, "make it blue", client=session)[0])
+```
+
 Every unknown option, every bad input picture and every failing server raises an error from `prompt2image.errors`: `ConfigError`, `OptionError`, `InputError` or `ModelError`. All four inherit from `ImageToolError`.
 
 ### Options
@@ -173,6 +192,7 @@ Order: argument, then environment variable, then default. Each task has its own 
 | `model` / `--model` | `PROMPT2IMAGE_MODEL` | none, required |
 | `api_key` / `--api-key` | `PROMPT2IMAGE_API_KEY` (then `OPENAI_API_KEY`) | optional |
 | `timeout` / `--timeout` | `PROMPT2IMAGE_TIMEOUT` | 300 seconds for images, 60 for text |
+| `max_retries` | `PROMPT2IMAGE_MAX_RETRIES` | 2, a busy server is tried again |
 | `max_mb` / `--max-mb` | `PROMPT2IMAGE_MAX_IMAGE_MB` | 20 |
 | `--allowed-hosts` | `PROMPT2IMAGE_ALLOWED_HOSTS` | localhost only |
 
@@ -185,11 +205,13 @@ The editing model, the vision model and the chat model read their own variables 
 | `describe` | `PROMPT2IMAGE_VISION_BASE_URL`, `PROMPT2IMAGE_VISION_MODEL`, `PROMPT2IMAGE_VISION_API_KEY` |
 | `--enhance` | `PROMPT2IMAGE_CHAT_BASE_URL`, `PROMPT2IMAGE_CHAT_MODEL`, `PROMPT2IMAGE_CHAT_API_KEY` |
 
+On the command line the first three read `--base-url`, `--model` and `--api-key`, and `--enhance` reads `--chat-base-url`, `--chat-model` and `--chat-api-key`.
+
 If the address or the model is missing, the error names the flag and the variable to set.
 
 ## Limitations
 
-Quality depends on the chosen model. Image models often misspell words, so lettering is asked to stay out of the picture by default. Not every server supports `/images/edits`, and the number of steps is passed as `num_inference_steps`, which some servers ignore. Input pictures are PNG or JPG, up to 20 MB. Results are always PNG.
+Quality depends on the chosen model. Image models often misspell words, so lettering is asked to stay out of the picture by default. Not every server supports `/images/edits`, and the number of steps is passed as `num_inference_steps`, which some servers ignore. Input pictures are PNG or JPG, up to 20 MB. Results are always PNG, whatever the server sends. A server that answers with a link instead of the image data is not supported, the tool needs `response_format: b64_json` or raw image bytes.
 
 ## Running Tests
 

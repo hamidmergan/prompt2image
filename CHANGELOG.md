@@ -17,3 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings per task from arguments, flags or environment variables, with a fallback to the main values
 - Web page with `prompt2image serve`: all three tasks in the browser, results shown and downloadable
 - `Dockerfile` and `docker-compose.yml`, so `docker compose up` serves the page on port 8000
+- `--chat-base-url`, `--chat-model` and `--chat-api-key` for the chat model behind `--enhance`
+- `PROMPT2IMAGE_MAX_RETRIES`: a busy server and a failed connection are tried again, by default twice
+- `client=` on all four functions, for a batch of pictures over one open connection
