@@ -22,11 +22,19 @@ If you run your own model, your pictures stay on your own network. Nothing leave
 
 ## Installation
 
+prompt2image is installed from GitHub:
+
 ```bash
-pip install prompt2image
+pip install git+https://github.com/hamidmergan/prompt2image.git
 ```
 
-Alternatively, you can install it from the source:
+With the web UI:
+
+```bash
+pip install "prompt2image[ui] @ git+https://github.com/hamidmergan/prompt2image.git"
+```
+
+Alternatively, you can install it from a local copy (`pip install ".[ui]"` for the web UI):
 
 ```bash
 git clone https://github.com/hamidmergan/prompt2image.git
@@ -41,7 +49,7 @@ pip install .
 The page carries all three tasks, with the same options as the command line.
 
 ```bash
-pip install "prompt2image[ui]"
+pip install "prompt2image[ui] @ git+https://github.com/hamidmergan/prompt2image.git"
 prompt2image serve
 ```
 

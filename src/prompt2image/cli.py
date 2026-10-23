@@ -176,7 +176,9 @@ def _run_serve(args: argparse.Namespace) -> int:
     try:
         import uvicorn
     except ImportError:
-        print("The web page needs the extra [ui]: pip install 'prompt2image[ui]'", file=sys.stderr)
+        print("The web page needs the extra [ui]: pip install "
+              "'prompt2image[ui] @ git+https://github.com/hamidmergan/prompt2image.git'",
+              file=sys.stderr)
         return 2
     from .web.app import create_app
 
