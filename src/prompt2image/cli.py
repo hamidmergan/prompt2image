@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -72,8 +73,9 @@ def _parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="Start the web page")
     serve.add_argument("--host", default="127.0.0.1", help="Host to listen on, default 127.0.0.1")
     serve.add_argument("--port", type=int, default=8000, help="Port, default 8000")
-    serve.add_argument("--allowed-hosts", default="",
-                       help="Comma separated host names the page answers for, * for any")
+    serve.add_argument("--allowed-hosts", default=os.environ.get("PROMPT2IMAGE_ALLOWED_HOSTS", ""),
+                       help="Comma separated host names the page answers for, * for any. "
+                            "Default: localhost only, which protects against DNS rebinding")
     return p
 
 
@@ -168,13 +170,14 @@ def _run_serve(args: argparse.Namespace) -> int:
         return 2
     from .web.app import create_app
 
-    hosts: Optional[List[str]] = None
-    if args.allowed_hosts.strip() == "*":
+    named = args.allowed_hosts.strip()
+    hosts: Optional[List[str]]
+    if named == "*":
         hosts = None
-    elif args.allowed_hosts.strip():
-        hosts = [h.strip() for h in args.allowed_hosts.split(",") if h.strip()]
+    elif named:
+        hosts = [h.strip() for h in named.split(",") if h.strip()]
     else:
-        hosts = ["localhost", "127.0.0.1", "::1", f"{args.host}:{args.port}".rsplit(":", 1)[0]]
+        hosts = sorted({"localhost", "127.0.0.1", "::1", args.host})
     print(f"The page is at http://{args.host}:{args.port}", file=sys.stderr)
     uvicorn.run(create_app(allowed_hosts=hosts), host=args.host, port=args.port, log_level="warning")
     return 0

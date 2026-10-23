@@ -1,0 +1,26 @@
+# Start the web page with: docker compose up
+# Then open http://localhost:8000 (another port: PROMPT2IMAGE_PORT=9000 docker compose up)
+services:
+  prompt2image:
+    build: .
+    image: prompt2image
+    ports:
+      - "127.0.0.1:${PROMPT2IMAGE_PORT:-8000}:8000"  # only reachable from this machine
+    environment:
+      # One server for everything, for example Ollama on this machine:
+      # PROMPT2IMAGE_BASE_URL=http://host.docker.internal:11434/v1 docker compose up
+      PROMPT2IMAGE_BASE_URL: ${PROMPT2IMAGE_BASE_URL:-}
+      PROMPT2IMAGE_MODEL: ${PROMPT2IMAGE_MODEL:-}
+      PROMPT2IMAGE_API_KEY: ${PROMPT2IMAGE_API_KEY:-}
+      # Each task can use its own server and model, these fall back to the values above.
+      PROMPT2IMAGE_EDIT_BASE_URL: ${PROMPT2IMAGE_EDIT_BASE_URL:-}
+      PROMPT2IMAGE_EDIT_MODEL: ${PROMPT2IMAGE_EDIT_MODEL:-}
+      PROMPT2IMAGE_EDIT_API_KEY: ${PROMPT2IMAGE_EDIT_API_KEY:-}
+      PROMPT2IMAGE_VISION_BASE_URL: ${PROMPT2IMAGE_VISION_BASE_URL:-}
+      PROMPT2IMAGE_VISION_MODEL: ${PROMPT2IMAGE_VISION_MODEL:-}
+      PROMPT2IMAGE_VISION_API_KEY: ${PROMPT2IMAGE_VISION_API_KEY:-}
+      PROMPT2IMAGE_CHAT_BASE_URL: ${PROMPT2IMAGE_CHAT_BASE_URL:-}
+      PROMPT2IMAGE_CHAT_MODEL: ${PROMPT2IMAGE_CHAT_MODEL:-}
+      PROMPT2IMAGE_CHAT_API_KEY: ${PROMPT2IMAGE_CHAT_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

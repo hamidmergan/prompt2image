@@ -51,7 +51,7 @@ prompt2image = "prompt2image.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-prompt2image = ["py.typed"]
+prompt2image = ["py.typed", "web/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

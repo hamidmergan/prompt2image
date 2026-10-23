@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>prompt2image</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Image generation</h1>
+      <p class="intro">Create, edit or describe images. Every result can be edited further or described right away.</p>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn" id="settings-button" aria-expanded="false">Settings</button>
+  </header>
+
+  <section class="card settings" id="settings" hidden>
+    <h2>Settings</h2>
+    <p class="hint" id="settings-hint"></p>
+    <div class="grid">
+      <label>Server address<input id="set-base-url" type="text" placeholder="http://localhost:11434/v1"></label>
+      <label>Image model<input id="set-model" type="text" placeholder="your-image-model"></label>
+      <label>Vision model<input id="set-vision-model" type="text" placeholder="your-vision-model"></label>
+      <label>API key<input id="set-api-key" type="password" placeholder="only if the server needs one"></label>
+    </div>
+    <p class="hint">A field left empty keeps the value from the environment. Nothing is stored on the server.</p>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" id="tab-generate" role="tab" aria-selected="true" data-tab="generate">Create image</button>
+    <button class="tab" id="tab-edit" role="tab" aria-selected="false" data-tab="edit">Edit image</button>
+    <button class="tab" id="tab-describe" role="tab" aria-selected="false" data-tab="describe">Describe image</button>
+  </nav>
+
+  <main class="layout">
+    <section class="card form">
+      <!-- Create -->
+      <div class="panel" id="panel-generate">
+        <label class="field" for="prompt">Prompt
+          <textarea id="prompt" rows="4" placeholder="Describe the image, for example: students working together on a project."></textarea>
+        </label>
+        <div class="row">
+          <button class="btn" id="enhance-button">Expand prompt</button>
+        </div>
+        <div id="enhanced-box" hidden>
+          <label class="field" for="enhanced">This is what the image model receives
+            <textarea id="enhanced" rows="4"></textarea>
+          </label>
+          <p class="hint">You can change the text. Leave it empty to use your prompt again.</p>
+        </div>
+        <div class="options" id="generate-options">
+          <div class="option"><span class="label">Style</span><div class="chips" id="generate-style"></div></div>
+          <div class="option"><span class="label">Format</span><div class="chips" id="generate-format"></div></div>
+          <div class="option"><span class="label">Size <span class="hint" id="generate-pixels"></span></span><div class="chips" id="generate-size"></div></div>
+          <div class="option"><span class="label">Quality <span class="hint">Higher quality takes longer.</span></span><div class="chips" id="generate-quality"></div></div>
+          <div class="option"><span class="label">Variants</span><div class="chips" id="generate-variants"></div></div>
+          <div class="option"><span class="label">Lettering <span class="hint">Image models often misspell words.</span></span>
+            <label class="check"><input type="checkbox" id="generate-no-text" checked> No lettering in the image</label>
+          </div>
+        </div>
+        <button class="btn primary wide" id="generate-button">Create image</button>
+      </div>
+
+      <!-- Edit -->
+      <div class="panel" id="panel-edit" hidden>
+        <label class="field" for="edit-prompt">What should change?
+          <textarea id="edit-prompt" rows="3" placeholder="Describe the change, for example: make the clothing blue."></textarea>
+        </label>
+        <div class="row" id="quick-edits"></div>
+        <div class="options">
+          <div class="option"><span class="label">Format</span><div class="chips" id="edit-format"></div></div>
+          <div class="option"><span class="label">Size <span class="hint" id="edit-pixels"></span></span><div class="chips" id="edit-size"></div></div>
+          <div class="option"><span class="label">Quality <span class="hint">Higher quality takes longer.</span></span><div class="chips" id="edit-quality"></div></div>
+          <div class="option"><span class="label">Variants</span><div class="chips" id="edit-variants"></div></div>
+        </div>
+        <button class="btn primary wide" id="edit-button">Edit image</button>
+      </div>
+
+      <!-- Describe -->
+      <div class="panel" id="panel-describe" hidden>
+        <div class="option"><span class="label">Task</span><div class="chips" id="describe-task"></div></div>
+        <label class="field" for="question" id="question-box" hidden>Your question
+          <textarea id="question" rows="3" placeholder="Your question about the image"></textarea>
+        </label>
+        <div class="option"><span class="label">Language</span><div class="chips" id="describe-language"></div></div>
+        <button class="btn primary wide" id="describe-button">Describe image</button>
+      </div>
+    </section>
+
+    <section class="card stage" id="stage">
+      <p class="message" id="message" role="alert" hidden></p>
+      <div class="placeholder" id="placeholder">
+        <p id="placeholder-text">Write a prompt and create your first image.</p>
+        <label class="btn">Upload your own image
+          <input type="file" id="upload" accept=".png,.jpg,.jpeg" hidden>
+        </label>
+        <p class="hint">PNG or JPG, max 20 MB. Dragging works too.</p>
+      </div>
+      <div class="shown" id="shown" hidden>
+        <div class="compare" id="compare" hidden>
+          <figure><figcaption>Before</figcaption><img id="before" alt="Before"></figure>
+          <figure><figcaption>After</figcaption><img id="after-image" alt="After"></figure>
+        </div>
+        <img id="large" alt="The selected image">
+        <div class="row">
+          <button class="btn" id="download-png">Download PNG</button>
+          <button class="btn" id="download-jpg">Download JPG</button>
+          <button class="btn" id="copy-prompt" hidden>Copy prompt</button>
+          <span class="spacer"></span>
+          <button class="btn" id="new-image">New image</button>
+        </div>
+        <div class="promptbox" id="promptbox" hidden>
+          <p class="label">Prompt</p>
+          <p id="shown-prompt"></p>
+          <details id="model-prompt-box">
+            <summary>Sent to the image model</summary>
+            <p id="shown-model-prompt"></p>
+          </details>
+          <p class="hint" id="shown-info"></p>
+        </div>
+        <div class="answers" id="answers"></div>
+      </div>
+      <p class="busy" id="busy" hidden><span class="spinner"></span><span id="busy-text">Creating…</span></p>
+    </section>
+  </main>
+
+  <section class="card history">
+    <h2>Your images <span class="count" id="history-count"></span></h2>
+    <p class="hint">New images are added at the front. A click shows the image large above.</p>
+    <div class="strip" id="strip"></div>
+    <p class="empty" id="history-empty">No images yet.</p>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

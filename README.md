@@ -36,6 +36,46 @@ pip install .
 
 ## Usage
 
+### Web UI
+
+The page carries all three tasks, with the same options as the command line.
+
+```bash
+pip install "prompt2image[ui]"
+prompt2image serve
+```
+
+Then open http://localhost:8000. Stop it with `Ctrl+C`. Use `--port 9000` for another port.
+
+Pick a tab for creating, editing or describing. A created picture stays in the strip below, so you can edit it further or have it described right away. Every result can be downloaded as PNG or JPG. An edit shows before and after side by side.
+
+The server and the models come from the environment. If something is missing, the page opens its settings and you can fill in the address, the model and the key there. Nothing is stored on the server, the fields travel with the call.
+
+The page only answers requests for localhost, which protects against DNS rebinding. On a server in a trusted network, use `--allowed-hosts your-server-name`, or `--allowed-hosts "*"` for any name. There is no login.
+
+### Docker
+
+```bash
+git clone https://github.com/hamidmergan/prompt2image.git
+cd prompt2image
+docker compose up
+```
+
+Then open http://localhost:8000. Another port: `PROMPT2IMAGE_PORT=9000 docker compose up`.
+
+With a model server on your own machine, for example Ollama:
+
+```bash
+PROMPT2IMAGE_BASE_URL=http://host.docker.internal:11434/v1 \
+PROMPT2IMAGE_MODEL=your-image-model \
+PROMPT2IMAGE_VISION_MODEL=your-vision-model \
+docker compose up
+```
+
+Inside the container, `localhost` is the container itself, so a model server on your machine is reached as `host.docker.internal`. All `PROMPT2IMAGE_*` settings can be passed the same way.
+
+The container only answers requests for localhost, and the published port stays on your own machine. To run it on a server for a trusted network, publish the port without `127.0.0.1:` and set `PROMPT2IMAGE_ALLOWED_HOSTS=your-server-name`.
+
 ### Command-Line
 
 Create a picture:
@@ -134,6 +174,7 @@ Order: argument, then environment variable, then default. Each task has its own 
 | `api_key` / `--api-key` | `PROMPT2IMAGE_API_KEY` (then `OPENAI_API_KEY`) | optional |
 | `timeout` / `--timeout` | `PROMPT2IMAGE_TIMEOUT` | 300 seconds for images, 60 for text |
 | `max_mb` / `--max-mb` | `PROMPT2IMAGE_MAX_IMAGE_MB` | 20 |
+| `--allowed-hosts` | `PROMPT2IMAGE_ALLOWED_HOSTS` | localhost only |
 
 The editing model, the vision model and the chat model read their own variables first:
 
