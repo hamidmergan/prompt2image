@@ -16,7 +16,7 @@ from . import options
 from .config import (CHAT, DESCRIBE_MAX_TOKENS, EDIT, IMAGE, PLACEHOLDER_API_KEY, VISION, Endpoint,
                      endpoint, max_image_mb)
 from .errors import ModelError, OptionError
-from .prompts import DEFAULT_QUESTION, ENHANCE_INSTRUCTION, GENERAL_INSTRUCTION, LANGUAGES
+from .prompts import DEFAULT_QUESTION, ENHANCE_INSTRUCTION, GENERAL_INSTRUCTION
 from .validation import check, dimensions
 
 # Some servers pick their edit model only by this header, the others ignore it.
@@ -392,7 +392,7 @@ def general_instruction(language: str = "") -> str:
     """The reading instruction without a task, in a chosen answer language."""
     if not language:
         return GENERAL_INSTRUCTION
-    name = LANGUAGES.get(language.strip().lower(), language.strip())
+    name = options.language_name(language)
     return f"{GENERAL_INSTRUCTION}\n\nRespond in {name}.\n\n{DEFAULT_QUESTION}"
 
 

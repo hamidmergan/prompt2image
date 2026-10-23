@@ -145,16 +145,35 @@ def image_prompt(description: str, style: str, *, no_text: bool) -> str:
     return " ".join(parts)
 
 
+# The longest an answer language may be. A name like "Brazilian Portuguese" stays well below.
+_MAX_LANGUAGE = 30
+
+
+def language_name(language: str) -> str:
+    """The name of an answer language, OptionError for anything that is no language name.
+
+    A code like "en" names its language, any other short plain name stands for itself,
+    so a language the table does not know can still be asked for.
+    """
+    text = language.strip()
+    if not text:
+        raise OptionError("the answer language is missing")
+    known = LANGUAGES.get(text.lower())
+    if known:
+        return known
+    words = text.replace("-", " ").split()
+    if len(text) > _MAX_LANGUAGE or not words or not all(word.isalpha() for word in words):
+        raise OptionError(f"unknown answer language {language!r}")
+    return text
+
+
 def read_instruction(task: str, language: str, question: str) -> str:
     """The instruction for reading an image, in the chosen answer language."""
     if task not in TASKS:
         raise OptionError(f"unknown task {task!r}")
-    if not language.strip():
-        raise OptionError("the answer language is missing")
+    name = language_name(language)
     if task == "question" and not question.strip():
         raise OptionError("a question task needs a question")
-    # A code like "en" names its language, anything else is taken as the language name itself.
-    name = LANGUAGES.get(language.strip().lower(), language.strip())
     parts = [BASE_RULES, TASKS[task], f"Respond in {name}."]
     if task == "question":
         parts.append(f"Question: {question.strip()}")
