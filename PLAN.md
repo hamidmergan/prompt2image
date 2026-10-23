@@ -16,10 +16,10 @@ Format, size, quality, style and count are configurable.
 - [x] 1 Core: generate, edit, describe; `config.py`, `errors.py`, prompts in English
 - [x] 2 API + CLI: `generate`, `edit`, `describe`
 - [x] 3 Tests with fake server, CLI, missing configuration, size check
-- [ ] 4 README, CHANGELOG 0.1.0, local smoke test
+- [x] 4 README, CHANGELOG 0.1.0, local smoke test
 - [ ] 5 English sweep, acceptance greps
 - [ ] 6 Web UI (`prompt2image serve`) and Docker
 
 ## Open
 
-- None yet
+- None
