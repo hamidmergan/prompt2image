@@ -5,7 +5,7 @@ import io
 import pytest
 from PIL import Image
 
-from conftest import png
+from conftest import jpg, png
 
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
@@ -96,6 +96,41 @@ def test_edit_keeps_the_source_for_before_and_after(settings, client):
     assert answer.status_code == 200 and len(data["images"]) == 1
     assert client.get(f"/api/image/{data['source']}").status_code == 200
     assert settings.bodies("/images/edits")[0]["prompt"] == "make it blue"
+
+
+def test_the_page_reports_the_size_that_was_used(settings, client):
+    settings.statuses = [422, 200]
+    settings.error = "the height must be between 1 and 1080"
+    data = client.post("/api/generate", data={"prompt": "a bike", "format": "16:9", "size": "large"}).json()
+    assert data["size"] == "1904x1072" and data["sizes"] == ["1904x1072"]
+
+
+def test_an_uploaded_jpg_keeps_its_own_content_type(settings, client):
+    data = client.post("/api/edit", data={"prompt": "make it blue"},
+                       files={"image": ("photo.jpg", jpg(), "image/jpeg")}).json()
+    assert client.get(f"/api/image/{data['source']}").headers["content-type"] == "image/jpeg"
+    assert client.get(f"/api/image/{data['images'][0]}").headers["content-type"] == "image/png"
+
+
+def test_the_chat_model_from_the_page_reaches_the_chat_endpoint(server, client, monkeypatch):
+    monkeypatch.setenv("PROMPT2IMAGE_BASE_URL", server.base_url)
+    monkeypatch.setenv("PROMPT2IMAGE_MODEL", "an-image-model")
+    client.post("/api/enhance", data={"prompt": "a bike", "model": "a-chat-model"})
+    assert server.bodies("/chat/completions")[0]["model"] == "a-chat-model"
+
+
+def test_the_page_has_a_model_field_for_every_task(client):
+    page = client.get("/").text
+    for field in ("set-model", "set-edit-model", "set-vision-model", "set-chat-model"):
+        assert f'id="{field}"' in page
+    script = client.get("/static/app.js").text
+    for kind in ("image", "edit", "vision", "chat"):
+        assert f'withSettings(new FormData(), "{kind}")' in script
+
+
+def test_the_upload_hint_takes_the_limit_from_the_settings(client):
+    assert "20 MB" not in client.get("/").text
+    assert "max_image_mb} MB" in client.get("/static/app.js").text
 
 
 def test_describe_answers_with_text(settings, client):

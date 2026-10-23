@@ -35,6 +35,14 @@ def mime(ext: str) -> str:
     return ALLOWED_EXTENSIONS.get(ext.lower(), "application/octet-stream")
 
 
+def media_type(content: bytes) -> str:
+    """The media type of the bytes themselves. Anything unknown is served as PNG, as results are."""
+    for ext, signatures in _SIGNATURES.items():
+        if any(content.startswith(signature) for signature in signatures):
+            return ALLOWED_EXTENSIONS[ext]
+    return "image/png"
+
+
 def validate_content(content: bytes, ext: str) -> None:
     """Checks via the leading bytes whether the content matches the extension."""
     expected = _SIGNATURES.get(ext.lower())

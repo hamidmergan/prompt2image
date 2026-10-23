@@ -22,12 +22,20 @@
     <h2>Settings</h2>
     <p class="hint" id="settings-hint"></p>
     <div class="grid">
-      <label>Server address<input id="set-base-url" type="text" placeholder="http://localhost:11434/v1"></label>
-      <label>Image model<input id="set-model" type="text" placeholder="your-image-model"></label>
-      <label>Vision model<input id="set-vision-model" type="text" placeholder="your-vision-model"></label>
-      <label>API key<input id="set-api-key" type="password" placeholder="only if the server needs one"></label>
+      <label>Server address<input id="set-base-url" type="text" placeholder="http://localhost:11434/v1">
+        <span class="hint">PROMPT2IMAGE_BASE_URL</span></label>
+      <label>Image model<input id="set-model" type="text" placeholder="your-image-model">
+        <span class="hint">PROMPT2IMAGE_MODEL, for creating</span></label>
+      <label>Editing model<input id="set-edit-model" type="text" placeholder="your-image-editing-model">
+        <span class="hint">PROMPT2IMAGE_EDIT_MODEL, for editing</span></label>
+      <label>Vision model<input id="set-vision-model" type="text" placeholder="your-vision-model">
+        <span class="hint">PROMPT2IMAGE_VISION_MODEL, for describing</span></label>
+      <label>Chat model<input id="set-chat-model" type="text" placeholder="your-chat-model">
+        <span class="hint">PROMPT2IMAGE_CHAT_MODEL, for expanding a prompt</span></label>
+      <label>API key<input id="set-api-key" type="password" placeholder="only if the server needs one">
+        <span class="hint">PROMPT2IMAGE_API_KEY</span></label>
     </div>
-    <p class="hint">A field left empty keeps the value from the environment. Nothing is stored on the server.</p>
+    <p class="hint">Every task has its own model, so each one has its own field. A field left empty keeps the value from the environment. Nothing is stored on the server.</p>
   </section>
 
   <nav class="tabs" role="tablist">
@@ -98,7 +106,7 @@
         <label class="btn">Upload your own image
           <input type="file" id="upload" accept=".png,.jpg,.jpeg" hidden>
         </label>
-        <p class="hint">PNG or JPG, max 20 MB. Dragging works too.</p>
+        <p class="hint" id="upload-hint">PNG or JPG. Dragging works too.</p>
       </div>
       <div class="shown" id="shown" hidden>
         <div class="compare" id="compare" hidden>

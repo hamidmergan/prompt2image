@@ -234,6 +234,17 @@ async function asJpg(blob) {
     canvas.toBlob((result) => (result ? resolve(result) : reject(new Error("jpg"))), "image/jpeg", 0.9));
 }
 
+async function asPng(blob) {
+  if (blob.type === "image/png") return blob;
+  const picture = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = picture.width;
+  canvas.height = picture.height;
+  canvas.getContext("2d").drawImage(picture, 0, 0);
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((result) => (result ? resolve(result) : reject(new Error("png"))), "image/png"));
+}
+
 async function copyText(text) {
   if (navigator.clipboard && window.isSecureContext) {
     await navigator.clipboard.writeText(text);
@@ -252,9 +263,14 @@ async function copyText(text) {
 
 // -- Calls --------------------------------------------------------------------
 
-function withSettings(form, visionModel) {
+// Every task has its own model, so the field follows the task.
+const MODEL_FIELDS = {
+  image: "set-model", edit: "set-edit-model", vision: "set-vision-model", chat: "set-chat-model",
+};
+
+function withSettings(form, kind) {
   const baseUrl = $("set-base-url").value.trim();
-  const model = (visionModel ? $("set-vision-model").value : $("set-model").value).trim();
+  const model = $(MODEL_FIELDS[kind]).value.trim();
   const key = $("set-api-key").value.trim();
   if (baseUrl) form.append("base_url", baseUrl);
   if (model) form.append("model", model);
@@ -285,7 +301,7 @@ async function busy(run) {
 
 function runEnhance() {
   return busy(async () => {
-    const form = withSettings(new FormData(), false);
+    const form = withSettings(new FormData(), "chat");
     form.append("prompt", $("prompt").value);
     const data = await call("/api/enhance", form);
     $("enhanced").value = data.prompt;
@@ -296,7 +312,7 @@ function runEnhance() {
 function runGenerate() {
   return busy(async () => {
     const c = state.choice;
-    const form = withSettings(new FormData(), false);
+    const form = withSettings(new FormData(), "image");
     form.append("prompt", $("prompt").value);
     form.append("model_prompt", $("enhanced").value);
     form.append("style", c.style);
@@ -306,15 +322,19 @@ function runGenerate() {
     form.append("variants", String(c.generateVariants));
     form.append("no_text", String($("generate-no-text").checked));
     const data = await call("/api/generate", form);
-    let first = true;
+    const sizes = data.sizes || [];
+    let index = 0;
     for (const id of data.images) {
+      // The size is the one the server really used, which can be smaller than the one asked for.
+      const used = sizes[index] || data.size;
       const image = add(await fetchImage(id), {
         prompt: data.prompt,
         modelPrompt: data.model_prompt,
         info: `${LABELS.styles[data.style]}, ${LABELS.formats[data.format]}, `
-          + `${data.size.replace("x", " × ")} px, ${LABELS.qualities[data.quality]}`,
+          + `${used.replace("x", " × ")} px, ${LABELS.qualities[data.quality]}`,
       });
-      if (first) { state.selected = image.key; first = false; }
+      if (index === 0) state.selected = image.key;
+      index += 1;
     }
   });
 }
@@ -324,7 +344,7 @@ function runEdit() {
   if (!image) return Promise.resolve();
   return busy(async () => {
     const c = state.choice;
-    const form = withSettings(new FormData(), false);
+    const form = withSettings(new FormData(), "edit");
     form.append("image", new File([image.blob], image.name, { type: image.blob.type || "image/png" }));
     form.append("prompt", $("edit-prompt").value);
     form.append("format", c.editFormat);
@@ -350,7 +370,7 @@ function runDescribe() {
   if (!image) return Promise.resolve();
   return busy(async () => {
     const c = state.choice;
-    const form = withSettings(new FormData(), true);
+    const form = withSettings(new FormData(), "vision");
     form.append("image", new File([image.blob], image.name, { type: image.blob.type || "image/png" }));
     form.append("prompt", c.task === "question" ? $("question").value : "");
     form.append("task", c.task);
@@ -404,6 +424,9 @@ async function start() {
     $("settings-button").setAttribute("aria-expanded", "true");
   }
 
+  $("upload-hint").textContent =
+    `PNG or JPG, max ${state.options.max_image_mb} MB. Dragging works too.`;
+
   const quick = $("quick-edits");
   for (const [key, text] of Object.entries(state.options.quick_edits)) {
     const button = document.createElement("button");
@@ -431,9 +454,10 @@ async function start() {
   $("describe-button").addEventListener("click", runDescribe);
   $("new-image").addEventListener("click", () => { state.selected = ""; draw(); });
   $("copy-prompt").addEventListener("click", () => { const i = selected(); if (i) copyText(i.prompt); });
-  $("download-png").addEventListener("click", () => {
+  $("download-png").addEventListener("click", async () => {
     const image = selected();
-    if (image) save(image.blob, image.name.replace(/\.[^.]+$/, "") + ".png");
+    // An uploaded JPG is turned into a PNG, so the file matches its name.
+    if (image) save(await asPng(image.blob), image.name.replace(/\.[^.]+$/, "") + ".png");
   });
   $("download-jpg").addEventListener("click", async () => {
     const image = selected();

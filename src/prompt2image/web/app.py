@@ -22,6 +22,7 @@ from ..config import CHAT, EDIT, IMAGE, VISION, endpoint, max_image_mb
 from ..core import describe, edit, enhance, generate, source_band
 from ..errors import ImageToolError
 from ..prompts import QUICK_EDITS
+from ..validation import media_type
 
 STATIC = Path(__file__).parent / "static"
 KEPT_IMAGES = 60  # pictures held in memory, the oldest one goes first
@@ -57,7 +58,7 @@ def create_app(allowed_hosts: Optional[Sequence[str]] = None) -> FastAPI:
     `allowed_hosts` limits the Host header (against DNS rebinding);
     requests from another origin are always refused.
     """
-    images: "OrderedDict[str, bytes]" = OrderedDict()
+    images: "OrderedDict[str, tuple]" = OrderedDict()  # id -> (bytes, media type)
     lock = threading.Lock()
 
     app = FastAPI(title="prompt2image")
@@ -78,7 +79,8 @@ def create_app(allowed_hosts: Optional[Sequence[str]] = None) -> FastAPI:
     def keep(data: bytes) -> str:
         image_id = uuid.uuid4().hex
         with lock:
-            images[image_id] = data
+            # The type comes from the bytes, an uploaded JPG stays a JPG.
+            images[image_id] = (data, media_type(data))
             while len(images) > KEPT_IMAGES:
                 images.popitem(last=False)
         return image_id
@@ -137,9 +139,11 @@ def create_app(allowed_hosts: Optional[Sequence[str]] = None) -> FastAPI:
         pictures = generate(prompt, style=style, format_=format_, size=size, quality=quality,
                             n=variants, no_text=no_text, model_prompt=model_prompt,
                             **_overrides(base_url, model, api_key))
+        # A server with a size limit gets a smaller picture, so the page shows what was used.
+        used = [getattr(picture, "size", "") or options.pixels(format_, size) for picture in pictures]
         return answer(pictures, prompt=prompt,
                       model_prompt=options.image_prompt(model_prompt.strip() or prompt, style, no_text=no_text),
-                      size=options.pixels(format_, size), style=style, format=format_, quality=quality)
+                      size=used[0], sizes=used, style=style, format=format_, quality=quality)
 
     def _upload(image: UploadFile) -> tuple:
         if not image.filename:
@@ -164,7 +168,7 @@ def create_app(allowed_hosts: Optional[Sequence[str]] = None) -> FastAPI:
                         filename=filename, **_overrides(base_url, model, api_key))
         # The source stays with the result, so the page can show before and after.
         return answer(pictures, prompt=prompt, filename=filename, format=format_, quality=quality,
-                      source=keep(source_band(content, filename=filename)))
+                      source=keep(source_band(content, format_=format_, filename=filename)))
 
     @app.post("/api/describe")
     def read(
@@ -185,10 +189,11 @@ def create_app(allowed_hosts: Optional[Sequence[str]] = None) -> FastAPI:
     @app.get("/api/image/{image_id}")
     def picture(image_id: str) -> Response:
         with lock:
-            data = images.get(image_id)
-        if data is None:
+            kept = images.get(image_id)
+        if kept is None:
             raise HTTPException(status_code=404, detail="This image is gone.")
-        return Response(content=data, media_type="image/png",
+        data, kind = kept
+        return Response(content=data, media_type=kind,
                         headers={"Cache-Control": "private, max-age=3600"})
 
     return app
