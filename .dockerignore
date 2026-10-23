@@ -1,9 +1,10 @@
-.git
-.github
-.venv
-.pytest_cache
 __pycache__
 *.egg-info
 dist
 build
-private
+private/
+tests/
+.env
+# Every hidden folder as well, for example the repository data or a local environment.
+# COPY . . would otherwise carry them into the published image.
+.*/
