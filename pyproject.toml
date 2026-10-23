@@ -29,13 +29,14 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "openai>=1.30",
+    "httpx>=0.27",
     "Pillow>=10.0",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=7"]
-dev = ["pytest>=7", "build", "twine"]
+ui = ["fastapi>=0.110", "uvicorn>=0.27", "python-multipart>=0.0.9"]
+test = ["pytest>=7", "fastapi>=0.110", "python-multipart>=0.0.9"]
+dev = ["pytest>=7", "fastapi>=0.110", "uvicorn>=0.27", "python-multipart>=0.0.9", "build", "twine"]
 
 [project.urls]
 Homepage = "https://github.com/hamidmergan/prompt2image"
